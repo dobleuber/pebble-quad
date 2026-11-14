@@ -1,9 +1,9 @@
-# Mini cuadrúpedo con servos de 4 g
+# Pebble Quad: mini cuadrúpedo con servos de 4 g
 
 Cuadrúpedo de bolsillo con un caparazón liso tipo piedra de río que cubre toda la mecánica y un visor
 ámbar en el frente. Camina, saluda y se balancea. Diseñado con
-[text-to-cad](https://github.com/earthtojake/text-to-cad) (build123d) y probado en MuJoCo. Proyecto
-independiente del resto del repositorio; vive en esta carpeta de forma temporal.
+[text-to-cad](https://github.com/earthtojake/text-to-cad) (build123d) y probado en MuJoCo. Todavía
+no se ha construido: todo lo que sigue es diseño y simulación.
 
 <p>
 <img src="media/robot.png" width="48%" alt="Modelo CAD">
@@ -195,17 +195,21 @@ src/walk_sim.py      pruebas y videos
 src/foot_loads.py    fuerzas máximas en los pies (marchas y caídas)
 src/leg_study.py     modelo de una pata para el análisis de esfuerzos
 fea/                 los 3 casos de carga y sus resultados
+scripts/             instalador de text-to-cad
 sim/                 modelo MuJoCo generado (quad.xml, mallas) y la escena (scene.xml)
 results/             resultados de las pruebas
 ```
 
 ## Cómo reproducirlo
 
-Requiere text-to-cad (`sh scripts/install-text-to-cad.sh` en la raíz del repositorio).
+Requiere text-to-cad. Este script lo instala para Claude Code y Codex (versión fijada, instalador
+verificado por checksum, telemetría apagada); se quita con `cad uninstall`:
 
 ```bash
-cd quad
+sh scripts/install-text-to-cad.sh
 ```
+
+Después, desde la raíz del repositorio:
 
 ```bash
 cad run src/robot.py
@@ -236,3 +240,7 @@ pieza de `cad run src/parts.py`: `cad model export <id> STL/pieza.stl`.
   [Motorobit](https://www.motorobit.com/emax-es9051-digital-mini-servo-motor-en)
 - GH-S37D: [manual de Wishiot](https://manuals.plus/asin/B0BFQLMTGW),
   [Zbotic](https://zbotic.in/product/micro-servo-37g-gh-s37d-90-degree/)
+
+## Licencia
+
+[MIT](LICENSE).
