@@ -1,4 +1,4 @@
-"""The stress study's model: one whole leg with its knee locked (README, "¿Aguantan las patas y los servos?").
+"""The stress study's model: one whole leg with its knee locked (README, "Do the legs and servos hold it?").
 
     cad run src/leg_study.py                     # prints the model's id
     cad model solve <id> --study fea/vertical+out.json --out tmp/fea/out
