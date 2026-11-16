@@ -40,3 +40,14 @@ class VoxelModel:
             out[case] = {"compliance": float(F[:, k] @ U[:, k]), "energy": energy.reshape(shape, order="F"),
                          "touched": support | (np.abs(field).sum(axis=3) > 0)}
         return out
+
+
+def voxelize(model, mesh):
+    """Which of the model's cells have their centre inside a mesh: a ray up each column, counting crossings."""
+    X, Y, Z, nx, ny, nz = model.X, model.Y, model.Z, model.nx, model.ny, model.nz
+    zc = Z[0, 0, :]
+    origins = np.stack([X[:, :, 0].ravel() + 1.37e-4, Y[:, :, 0].ravel() + 0.71e-4, np.full(nx * ny, zc[0] - 50.0)], axis=1)
+    hits, ray, _ = mesh.ray.intersects_location(origins, np.tile([0.0, 0.0, 1.0], (len(origins), 1)), multiple_hits=True)
+    crossings = np.zeros((nx * ny, nz + 1), int)
+    np.add.at(crossings, (ray, np.searchsorted(zc, hits[:, 2])), 1)
+    return (np.cumsum(crossings, axis=1)[:, :nz] % 2 == 1).reshape(ny, nx, nz)

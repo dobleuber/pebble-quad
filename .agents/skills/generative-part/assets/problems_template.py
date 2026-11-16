@@ -23,7 +23,7 @@ def bracket():
             "pulled along": [RemoteLoad([pad], (37, 0, 12), (15, 0, -5))],
         },
         round=3.0, voxel=1.0, volfrac=0.30, rmin=2.5, min_wall=1.2,
-        baseline="",                                   # an STL of the part this replaces, same frame, to compare with
+        baseline="",                                   # "baselines/bracket.stl": the part this replaces, same frame, to compare with
     )
 
 

@@ -68,6 +68,9 @@ class Problem:
     rmin: float = 3.0             # filter radius in voxels: the smallest member
     min_wall: float = 1.2
     iterations: int = 80
+    balance: str = "auto"         # what the optimizer drives down: "worst", the worst case against the baseline, or
+                                  # "sum", all cases alike; "auto" is "worst" with a baseline and "sum" without
+    weights: dict = field(default_factory=dict)    # case -> how much it counts (default 1)
     baseline: str = ""            # an STL of the part this one replaces, in the same frame, to compare with
     mirrored: bool = False        # also write the mirror image in y (left and right hands)
     youngs: float = 3500.0        # MPa (PLA)
@@ -116,16 +119,30 @@ class Problem:
             centres = [np.array([X[m].mean(), Y[m].mean(), Z[m].mean()]) for m in masks]
             c0 = np.mean(centres, axis=0)
             force = np.asarray(load.force, float)
-            if len(masks) == 1:                               # one patch: it takes the force (the point is at it)
-                forces = [force]
-            else:                                             # several: the least forces with that resultant and moment
-                a = np.zeros((6, 3 * len(masks)))
-                for i, c in enumerate(centres):
-                    r = c - c0
-                    a[0:3, 3 * i:3 * i + 3] = np.eye(3)
-                    a[3:6, 3 * i:3 * i + 3] = [[0, -r[2], r[1]], [r[2], 0, -r[0]], [-r[1], r[0], 0]]
-                moment = np.cross(np.asarray(load.point, float) - c0, force)
-                forces = (np.linalg.pinv(a) @ np.concatenate([force, moment])).reshape(-1, 3)
+            moment = np.cross(np.asarray(load.point, float) - c0, force)
+            if len(masks) == 1:
+                # One patch: every cell takes its share of the force, and when the force acts off the patch the
+                # cells also take the moment it has about the patch, as a rigid pad would (f = F/n + w x r).
+                m = masks[0]
+                rho = np.stack([X[m], Y[m], Z[m]], axis=1) - c0
+                per_cell = np.tile(force / m.sum(), (m.sum(), 1))
+                reach = np.linalg.norm(moment) / max(np.linalg.norm(force), 1e-12)
+                if reach > 0.05 * max(np.ptp(rho, axis=0).max(), 1e-9):
+                    inertia = (rho ** 2).sum() * np.eye(3) - rho.T @ rho
+                    per_cell = per_cell + np.cross(np.linalg.pinv(inertia) @ moment, rho)
+                out[m] += per_cell
+                continue
+            a = np.zeros((6, 3 * len(masks)))                 # several: the least forces with that resultant and moment
+            for i, c in enumerate(centres):
+                r = c - c0
+                a[0:3, 3 * i:3 * i + 3] = np.eye(3)
+                a[3:6, 3 * i:3 * i + 3] = [[0, -r[2], r[1]], [r[2], 0, -r[0]], [-r[1], r[0], 0]]
+            wrench = np.concatenate([force, moment])
+            solution = np.linalg.pinv(a) @ wrench
+            missed = np.linalg.norm(a @ solution - wrench) / max(np.linalg.norm(wrench), 1e-12)
+            assert missed < 0.02, (f"{self.name}: the patches of case {case!r} cannot carry the moment this force has about "
+                                   "them (they lie on one line): split them across that line or add a patch off it")
+            forces = solution.reshape(-1, 3)
             for m, f in zip(masks, forces):
                 out[m] += f / m.sum()
         return out

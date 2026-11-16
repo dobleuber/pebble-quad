@@ -28,38 +28,48 @@ Run one heavy job at a time. The optimizer and Blender each take gigabytes; two 
 
 ## 2. Choose the parts worth growing
 
-Not every part gains. Before any work, sort the design's printed parts into three groups and tell the user:
+Not every part gains. Sort the design's printed parts into three groups first, and say which is which (with
+the user present, before spending minutes on any; otherwise at the top of the report):
 
 - **Worth it**: carries load between a few interfaces, with free space around it - arms, legs, brackets,
   motor cradles. This is where the pipeline has given a thigh 13 % lighter and 1.5 to 5 times stiffer.
 - **A little**: mostly walls that must exist (pockets, trays, housings). Expect the same stiffness for
   10 to 15 % less mass, no more.
 - **Not worth it**: small parts that are almost all mandatory features (a hub, two screw bosses and a peg),
-  covers and shells, anything that must stay easy to edit or print without supports. The pipeline has made
-  such a part 3 to 7 times *less* stiff than a plain hand-drawn one of the same mass.
+  covers and shells, spacers, anything that must stay easy to edit or print without supports. The pipeline has
+  made such a part 3 to 7 times *less* stiff than a plain hand-drawn one of the same mass. Say so instead of
+  running it.
 
 `references/judgement.md` has the reasoning and the numbers behind this.
 
 ## 3. Bring the part and its neighbours into one frame
 
 The optimizer needs the existing part as a mesh to compare with, and its surroundings to know what to avoid.
-Export each as STL in millimetres, **in the part's own frame**: Z up from the face it prints on, the main
-interface (a shaft, a mounting screw) at the origin when there is one. Holes and screws should run along Z,
-because the problem's primitives are boxes and cylinders along Z only.
+Keep everything for the pipeline in one folder of the project (below, `generative/`): the problems file, and
+beside it `baselines/` for these meshes. Export each as STL in millimetres, **in the part's own frame**: Z up
+from the face it prints on, the main interface (a shaft, a mounting screw) at the origin when there is one.
+Holes and screws should run along Z, because the problem's primitives are boxes and cylinders along Z only.
 
-- text-to-cad model: `cad model export <id> baselines/<part>.stl --tolerance 0.02` (a part's own model is
-  already in its frame); a STEP: `cad step export part.step baselines/<part>.stl`.
-- OpenSCAD: `openscad -o baselines/<part>.stl -D 'part="<name>"' design.scad`, or a small `.scad` that calls
-  the module with its transform undone.
+- text-to-cad model: `cad model export <id> generative/baselines/<part>.stl --tolerance 0.02` (a part's own
+  model is already in its frame); a STEP: `cad step export part.step generative/baselines/<part>.stl`.
+- OpenSCAD: `openscad -o generative/baselines/<part>.stl -D 'part="<name>"' design.scad`, or a small `.scad`
+  that calls the module with its transform undone.
 - Only an STL of the whole assembly: split it by body first, and say what could not be separated.
 
 Then measure what you have:
 
 ```bash
-$PY $SKILL/scripts/measure.py baselines/<part>.stl neighbour1.stl neighbour2.stl
+$PY $SKILL/scripts/measure.py generative/baselines/<part>.stl neighbour1.stl neighbour2.stl
 ```
 
-It prints the part's box, volume and mass, and each neighbour's box as a keep-out line to start from.
+It prints the part's box, volume and mass, and each neighbour's box as a keep-out line to start from. A
+neighbour's whole box is rarely the keep-out: a motor's box includes its tabs, and the part's own posts sit
+under them. `measure.py` says when a box would cut into the part; describe that neighbour as its body and its
+tabs apart. If the CAD source is there, read the dimensions from it rather than from the mesh.
+
+What surrounds the part decides how much it can gain: free room is what the optimizer turns into stiffness. If
+it is not known how much room there is beside and above the part, ask; without an answer keep the original's
+box and say in the report that more room would likely give more.
 
 ## 4. Describe the problem
 
@@ -68,9 +78,14 @@ per part. Read `references/problem.md` first: it explains each field, how to get
 them, and the mistakes that cost a run.
 
 The loads decide everything, and they are the user's to give. If they are not known, derive them from something
-real (a motor's stall torque over its lever arm, the weight carried times 2 or 3 for dynamics, a simulation's
-peak) and state the assumption in the problem's docstring and in the report. Give at least three cases that
-push in different directions: a part grown for one load is strong in that direction and weak in the others.
+real (a motor's stall torque over its lever arm, the weight carried times 2 for a slow arm or 3 for a walker or
+anything that lands, a simulation's peak) and state the assumption in the problem's docstring and in the report.
+Give at least three cases that push in different directions: a part grown for one load is strong in that
+direction and weak in the others.
+
+The direction matters as much as the size. If it is not clear which way gravity or the main force acts in the
+part's frame (which face is up when the machine works), ask. If nobody can answer, give a case for each way
+it can act, and say in the report that the verdict holds for all of them.
 
 ## 5. Look before you run
 
@@ -89,30 +104,52 @@ keep-out or a load patch in thin air is obvious here and costs minutes to find l
 sh $SKILL/scripts/run.sh generative/problems.py <part>
 ```
 
-Steps, in order: `optimize` (minutes: the log is `out/<part>_optimize.log`), `cleanup`, `finish` (Blender),
-`check` (is the mesh one closed body; a printability check too when text-to-cad is there) and `evaluate`.
+Steps, in order: `optimize` (the log is `out/<part>_optimize.log`), `cleanup`, `finish` (Blender), `check` (is
+the mesh one closed body; a printability check too when text-to-cad is there) and `evaluate`.
 `STEPS="cleanup finish check evaluate"` redoes the cheap ones on a density field that is already there.
 For a run longer than a few minutes, start it in the background and read the log.
 
-A grid of 30 000 cells takes about 4 s an iteration and 80 iterations; 80 000 cells is where it stops being
-practical here. Coarsen the voxel before anything else.
+How long: 15 000 cells take about 1 s an iteration, 30 000 about 4 s, for 80 iterations; 80 000 cells is where
+it stops being practical here. Coarsen the voxel before anything else.
+
+What the lines mean:
+
+- `compliance over the baseline's as optimized`: an early sign, per case, on the raw density field. Under 1 is
+  stiffer than the original; the finished part usually does better than this line says.
+- `pruned N mm3 of idle material`: material no load passed through (stubs) was removed. Normal when small.
+- `thin walls grown by N mm3`: walls near the minimum got a margin for the smoothing.
+- `skin of 0.35 mm voxels: ... 0 open edges`: the finished surface is closed. If not, the step retries by itself.
+- `N slivers of no volume`: stray triangles a boolean left beside the part. A slicer ignores them.
+
+Every evaluation is added to `out/<part>_attempts.json` with its settings and numbers, so attempts can be
+compared after `out/` is overwritten. To keep an attempt's mesh, copy `out/<part>.stl` aside before the next run.
 
 ## 7. Read the result and decide
 
 `evaluate` prints, per load case, stiffness and indicative stress against the original, and the mass.
-Look at the mesh too (`cad stl snapshot out/<part>.stl out/<part>.png`, or any viewer): a number does not show
-a stub, a blob or a neck.
+Look at both meshes too: a number does not show a stub, a blob or a neck.
+
+```bash
+cad stl snapshot generative/out/<part>.stl generative/out/<part>.png --camera iso
+cad stl snapshot generative/baselines/<part>.stl generative/out/<part>_original.png --camera iso
+cad stl dfm generative/baselines/<part>.stl --process printing --technology fdm --material pla
+```
+
+(the last one gives the original's printability, for the report's table; `--camera bottom` shows an underside.)
 
 - Lighter and at least as stiff in **every** case: adopt it.
-- Stiffer in some cases and weaker in others: the cases or the space are wrong, not the tool. See
-  `references/judgement.md` for what to change (it lists each symptom and its usual cause).
-- No better than the original at the same mass: say so and keep the original. That is a result, and an honest
-  one is worth more than a pretty mesh.
+- Weaker than the original in a case: do not adopt it as it is. The optimizer already leans on the case that
+  is furthest behind the original (`balance="worst"`, the default with a baseline), so what is left to change is
+  the room (wider or taller `bounds`), the budget (`volfrac`), or that case's weight
+  (`weights={"sideways": 2}`). `references/judgement.md` lists each symptom and its usual cause.
+- No better than the original at the same mass after three attempts: say so and keep the original. That is a
+  result, and an honest one is worth more than a pretty mesh.
 
-Change one thing at a time between runs (volume fraction, member size, a keep-out), and keep the numbers of
-each attempt for the report.
+Change one thing at a time between runs, and keep the numbers of each attempt for the report.
 
 ## 8. Hand it over
+
+Only for a part that is adopted (a rejected one stays in `out/`, so that `parts/` holds what the design uses):
 
 ```bash
 STEPS=lite sh $SKILL/scripts/run.sh generative/problems.py <part>

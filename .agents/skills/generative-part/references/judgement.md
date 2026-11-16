@@ -24,7 +24,15 @@ What was measured on a 100 g quadruped with 4 g servos, in PLA, each part agains
 |---|---|---|---|---|
 | Thigh: a plate carrying a servo, 48 mm | load path with free room around it | −13 % | ×4.3, ×5.1, ×1.5, ×2.0 | adopted |
 | Chassis tray: four pockets and a battery bay, 98 mm | mostly mandatory walls | −13 % | ×0.99, ×1.00 | adopted |
-| Lower leg: hub, two screw bosses, a peg, 37 mm | almost all mandatory features | same | ×0.29, ×0.24, ×0.14, ×0.14 | rejected |
+| Lower leg: hub, two screw bosses, a peg, 37 mm | almost all mandatory features | same | ×0.26, ×0.24, ×0.14, ×0.14 | rejected |
+
+And on a 72 mm forearm link of a small arm (a 4 mm plate with two posts carrying a servo), in the original's own
+box, with the same three cases and the same budget:
+
+| Objective | Mass | Stiffness: down, sideways, along |
+|---|---|---|
+| `balance="sum"` | −9 % | ×8.3, **×0.48**, ×21 |
+| `balance="worst"` (the default with a baseline) | −4 % | ×2.2, ×1.4, ×3.7 |
 
 The pattern behind it:
 
@@ -34,6 +42,9 @@ The pattern behind it:
 - **Mandatory features are not optimized.** If bosses, seats and pocket walls are more than about 40 % of the
   target volume, what is left is too little to rearrange. A tapered plate drawn by hand is already close to
   the best beam.
+- **A flat plate is already the best shape for a load in its own plane.** Left to add up all cases, the
+  optimizer trades that plate for depth, wins hugely in bending and loses sideways. Measuring each case against
+  the original and following the worst one (`"worst"`) keeps what the original was good at.
 - **A robot does not feel 4 %.** Taking 4 g off a 104 g walker changed nothing in its gait or servo load. Mass
   matters at the end of a moving limb, or when it adds up over many parts; stiffness matters where a mechanism
   loses accuracy or where the original was marginal in its stress analysis.
@@ -41,17 +52,18 @@ The pattern behind it:
 Costs to tell the user before they ask:
 
 - Grown parts need **supports** to print (the thigh, half its own volume), where the original needed none.
-- They are **meshes**. Changing a dimension means running the pipeline again, about ten minutes a part.
+- They are **meshes**. Changing a dimension means running the pipeline again: two to ten minutes a part.
 - The original stays the reference: keep it in the design and offer the grown part as a second build.
 
 ## When a result is wrong
 
 | What you see | Usual cause | What to change |
 |---|---|---|
-| Much stiffer in one case, weaker than the original in others | the cases do not span what the part meets | add the missing directions; never fewer than three |
+| Much stiffer in one case, weaker than the original in a case that is missing from the set | the cases do not span what the part meets | add the missing directions; never fewer than three |
+| Weaker than the original in a case that is in the set | the original is already the best shape for that load (a plate loaded in its plane), and the space or the budget cannot match it and the other cases too | check `balance` is `"worst"`; then more room (`bounds`), then more material (`volfrac`), then that case's `weights`; if the original's plate is what works, preserve a thinner one as a floor |
 | A thin neck between two blobs | the crisp features take most of the volume fraction | raise `volfrac`, shrink `preserve`, or drop the part |
 | A member that ends in the air | a strut the optimizer left half-formed | `cleanup.py` prunes these; if one survives, raise `rmin` |
-| Heavier than aimed | cleanup and finishing add 10 to 20 % | lower `volfrac` by that much |
+| Heavier or lighter than aimed | cleanup and finishing add 5 to 20 % to the optimizer's volume | correct `volfrac` by the ratio, once |
 | The printability check finds a wall under 0.8 mm | a skin beside a pocket or a hole | preserve a wall there (a liner or a boss); do not raise `min_wall` for the whole part, it inflates everything |
 | `optimize` refuses to start | preserved share above the volume fraction, or nothing held | read its message and `preview.py`'s |
 | `finish` reports open edges on every skin | a keep-out that only touches another | overlap them by 1 mm |

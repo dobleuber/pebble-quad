@@ -40,7 +40,8 @@ def thigh():
                "up": [RemoteLoad(patches, foot, (*up, 0.0))],
                "up + in": [RemoteLoad(patches, foot, (*up, -5.0))],
                "up + aft": [RemoteLoad(patches, foot, (up[0] - 2.87, up[1] - 4.10, 0.0))]},
-        voxel=0.75, volfrac=0.26, rmin=3.0, baseline="baselines/thigh.stl", mirrored=True)
+        voxel=0.75, volfrac=0.26, rmin=3.0, baseline="baselines/thigh.stl", mirrored=True,
+        balance="sum")            # as it was grown: all cases alike, each against its own start
 
 
 # ------------------------------------------------------------------------------------------- lower leg
@@ -68,7 +69,8 @@ def shank():
                "up": [RemoteLoad(at_foot, foot, (*up, 0.0))],
                "up + in": [RemoteLoad(at_foot, foot, (*up, -5.0))],
                "up + aft": [RemoteLoad(at_foot, foot, (up[0] + 2.87, up[1] - 4.10, 0.0))]},
-        round=2.0, voxel=0.5, volfrac=0.28, rmin=5.0, baseline="baselines/shank.stl", mirrored=True)     # members of 2.5 mm: a small part
+        round=2.0, voxel=0.5, volfrac=0.28, rmin=5.0, baseline="baselines/shank.stl", mirrored=True,     # members of 2.5 mm: a small part
+        balance="sum")
 
 
 # ------------------------------------------------------------------------------------------- chassis tray
@@ -116,7 +118,7 @@ def tray():
         holes=[zcyl(x, y, 0.65, top - 6, 99) for x, y in screws],
         support=[zcyl(x, y, 2.3, top - 2.5, top + 1) for x, y in screws],
         cases={"four feet, up + out": loads_all, "one diagonal, up + out": loads_diag},
-        round=3.0, round_top=False, voxel=1.0, rmin=2.0, min_wall=1.2, baseline="baselines/tray.stl",
+        round=3.0, round_top=False, voxel=1.0, rmin=2.0, min_wall=1.2, baseline="baselines/tray.stl", balance="sum",
         volfrac=0.62,       # the pockets' liners alone are 0.44 of the space; the hand-drawn tray fills 0.85
         extra={"blender": {"subdivide": 0}})                 # mostly flat walls: nothing to gain from a finer skin
 

@@ -9,38 +9,29 @@ stress with the same strain energy density, 99th percentile over the material aw
 loaded patches). Voxel stresses are rough: with a baseline, read them as a ratio between the two designs, and
 never as a safety factor.
 
-Reads out/<part>.stl and the problem's `baseline` STL (same frame); writes out/<part>_eval.json.
+Reads out/<part>.stl and the problem's `baseline` STL (same frame); writes out/<part>_eval.json and adds the
+run to out/<part>_attempts.json.
 Needs pytopo3d, trimesh, rtree.
 """
 import json
 import os
+import time
 
 import numpy as np
 import trimesh
 from scipy.ndimage import binary_dilation
 
-from fe import VoxelModel
+from fe import VoxelModel, voxelize
 from genpart import load
 
 problem, rest = load(__doc__.split("\n")[2].strip())
 h = float(rest[0]) if rest else problem.voxel
 model = VoxelModel(problem, h)
-X, Y, Z, nx, ny, nz = model.X, model.Y, model.Z, model.nx, model.ny, model.nz
-
-
-def voxelize(mesh):
-    """Which cell centres are inside the mesh: a ray up each column, counting the crossings below each cell."""
-    zc = Z[0, 0, :]
-    origins = np.stack([X[:, :, 0].ravel() + 1.37e-4, Y[:, :, 0].ravel() + 0.71e-4, np.full(nx * ny, zc[0] - 50.0)], axis=1)
-    hits, ray, _ = mesh.ray.intersects_location(origins, np.tile([0.0, 0.0, 1.0], (len(origins), 1)), multiple_hits=True)
-    crossings = np.zeros((nx * ny, nz + 1), int)
-    np.add.at(crossings, (ray, np.searchsorted(zc, hits[:, 2])), 1)
-    return (np.cumsum(crossings, axis=1)[:, :nz] % 2 == 1).reshape(ny, nx, nz)
 
 
 def study(path):
     mesh = trimesh.load(path)
-    solid = voxelize(mesh)
+    solid = voxelize(model, mesh)
     volume = float(abs(mesh.volume))
     result = {"file": os.path.relpath(path, problem.folder), "volume_mm3": round(volume, 1), "mass_g": round(volume * problem.density, 2),
               "voxel_volume_mm3": round(float(solid.sum() * h ** 3), 1), "cases": {}}
@@ -58,6 +49,17 @@ if problem.baseline:
     report["baseline"] = study(os.path.join(problem.folder, problem.baseline))
 with open(problem.path("out", f"{problem.name}_eval.json"), "w") as f:
     json.dump(report, f, indent=1)
+
+# Every evaluation is an attempt: keep its settings and numbers, so runs can be compared after out/ is overwritten.
+log = problem.path("out", f"{problem.name}_attempts.json")
+attempts = json.load(open(log)) if os.path.exists(log) else []
+attempts.append({"when": time.strftime("%Y-%m-%d %H:%M"), "voxel": problem.voxel, "volfrac": problem.volfrac, "rmin": problem.rmin,
+                 "balance": problem.balance, "weights": problem.weights, "bounds": list(problem.bounds), "cases": list(problem.cases),
+                 "mass_g": report["generative"]["mass_g"], "baseline_mass_g": report.get("baseline", {}).get("mass_g"),
+                 "stiffness_x": {c: round(report["baseline"]["cases"][c]["compliance_Nmm"] / report["generative"]["cases"][c]["compliance_Nmm"], 2)
+                                 for c in problem.cases} if "baseline" in report else None})
+with open(log, "w") as f:
+    json.dump(attempts, f, indent=1)
 
 b, g = report.get("baseline"), report["generative"]
 if b:

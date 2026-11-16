@@ -10,6 +10,7 @@ wants a zcyl, and a neighbour that only touches the part is a face to mate with,
 import math
 import sys
 
+import numpy as np
 import trimesh
 
 GRID = 0.25
@@ -26,3 +27,11 @@ for path in sys.argv[2:]:
     gap = max(max(a[i] - hi[i], lo[i] - b[i]) for i in range(3))
     where = f"{gap:.2f} mm away from the part's box" if gap > 0 else "reaches into the part's box"
     print(f"box({a[0]:.2f}, {b[0]:.2f}, {a[1]:.2f}, {b[1]:.2f}, {a[2]:.2f}, {b[2]:.2f}),   # {path}: {where}")
+    if gap <= 0:                                             # how much of the part itself that box would cut away
+        axes = [np.arange(max(lo[i], a[i]) + 0.25, min(hi[i], b[i]), 0.5) for i in range(3)]
+        if all(len(axis) for axis in axes):
+            points = np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3)
+            swallowed = part.contains(points).sum() * 0.5 ** 3
+            if swallowed > 1:
+                print(f"    as one box it would cut {swallowed:.0f} mm3 out of the part itself (features that reach around the "
+                      "neighbour, such as posts under a motor's tabs): describe the neighbour as several smaller boxes instead")

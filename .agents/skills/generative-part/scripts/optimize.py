@@ -5,6 +5,7 @@
 Writes out/<part>_rho.npy beside the problems file: the density field [y, x, z] and, beside it, the voxel size.
 Needs pytopo3d 0.3 (setup_env.sh installs it): this step reaches into its optimizer.
 """
+import os
 import time
 import warnings
 
@@ -41,16 +42,33 @@ if nx * ny * nz > 60000:
           f"is the first thing to try", flush=True)
 
 
+names = list(problem.cases)
+balance = problem.balance if problem.balance != "auto" else ("worst" if problem.baseline else "sum")
+of_baseline = None                                           # the baseline's compliance in each case, in the optimizer's units
+if problem.baseline:
+    import trimesh
+
+    from fe import VoxelModel, voxelize
+    model = VoxelModel(problem, h)
+    solved = model.solve(voxelize(model, trimesh.load(os.path.join(problem.folder, problem.baseline))))
+    of_baseline = [solved[name]["compliance"] * problem.youngs * h for name in names]
+if balance == "worst" and of_baseline is None:
+    raise SystemExit(f'{problem.name}: balance="worst" measures each case against the baseline, and the problem names none')
+POWER = 6                                                    # how hard "worst" leans on the worst case (a 6-norm)
+
+
 class AllCases(optimizer.ComplianceEvaluator):
     """PyTopo3D grows a part for one load. This grows it for all the cases at once: one assembly and one
-    factorization per iteration, a solve per case, and as objective the sum of the cases' compliances, each as
-    a share of what it was for the first, even fill - so a case the part resists easily weighs as much as one
-    it does not."""
+    factorization per iteration, a solve per case. Each case's compliance is taken as a share of a reference, so
+    a case the part resists easily weighs as much as one it does not. "sum" adds the shares, each of what the
+    case's compliance was for the first, even fill. "worst" takes their 6-norm, each a share of the baseline's
+    compliance in that case: it follows whichever case is furthest behind the part being replaced."""
 
     def __init__(self, **given):
         super().__init__(**given)
         self.F = np.stack([build_force_vector(nx, ny, nz, self.ndof, f) for f in forces], axis=1)
-        self.weights = None
+        self.reference = of_baseline if balance == "worst" else None
+        self.each = None
 
     def evaluate(self, xPhys, penal):
         E0, Emin = self.E0, self.Emin
@@ -61,15 +79,33 @@ class AllCases(optimizer.ComplianceEvaluator):
         U[free] = np.asarray(self.solver_func(self.K[free, :][:, free], self.F[free])).reshape(len(free), -1)
         ce = [element_compliance(U[:, k], self.edofMat, self.KE).reshape(self.shape, order="F") for k in range(U.shape[1])]
         each = [float(((Emin + xPhys ** penal * (E0 - Emin)) * e).sum()) for e in ce]
-        if self.weights is None:
-            self.weights = [1 / c for c in each]
-        ce = sum(w * e for w, e in zip(self.weights, ce))
+        if self.reference is None:
+            self.reference = list(each)
+        shares = np.array([problem.weights.get(name, 1.0) * c / r for name, c, r in zip(names, each, self.reference)])
+        self.each = each
+        if balance == "worst":
+            objective = float((shares ** POWER).sum() ** (1 / POWER))
+            lean = (shares / objective) ** (POWER - 1)       # d objective / d share
+        else:
+            objective, lean = float(shares.sum()), np.ones(len(shares))
+        ce = sum(w * problem.weights.get(name, 1.0) / r * e for w, name, r, e in zip(lean, names, self.reference, ce))
         dc = -penal * (E0 - Emin) * xPhys ** (penal - 1) * ce
         dc = (self.H * (dc.ravel(order="F") / self.Hs)).reshape(self.shape, order="F")
         dv = (self.H * (np.ones(xPhys.size) / self.Hs)).reshape(self.shape, order="F")
         dc[self.obstacle_mask] = dv[self.obstacle_mask] = 0.0
-        return sum(w * c for w, c in zip(self.weights, each)), dc, dv
+        return objective, dc, dv
 
+
+kept_evaluators = []
+make = AllCases.__init__
+
+
+def remember(self, **given):
+    make(self, **given)
+    kept_evaluators.append(self)
+
+
+AllCases.__init__ = remember
 
 # PyTopo3D has voids it must keep (the obstacle mask) but no solids: hold the preserved features at full
 # density after every update, so the structure grows onto them instead of rebuilding them.
@@ -93,3 +129,6 @@ np.save(problem.path("out", f"{problem.name}_rho.npy"), rho)
 with open(problem.path("out", f"{problem.name}_rho.txt"), "w") as f:
     f.write(f"{h}\n")
 print(f"{problem.name}: solved in {time.time() - t0:.0f} s; solid {(rho > 0.5).sum() * h ** 3:.0f} mm3 before cleanup", flush=True)
+if of_baseline and kept_evaluators:                          # an early sign, on the density field (grey cells count as weak
+    print(f"{problem.name}: compliance over the baseline's as optimized, {balance} (under 1 is stiffer): "     # material: the finished part does better)
+          + ", ".join(f"{name} {c / r:.2f}" for name, c, r in zip(names, kept_evaluators[-1].each, of_baseline)), flush=True)
