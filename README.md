@@ -195,10 +195,11 @@ src/walk_sim.py      tests and videos
 src/foot_loads.py    peak forces on the feet (gaits and drops)
 src/leg_study.py     one leg's model for the stress analysis
 fea/                 the 3 load cases and their results
-scripts/             text-to-cad installer
+scripts/             installers: text-to-cad, and the generative-part skill for use in other projects
 sim/                 generated MuJoCo model (quad.xml, meshes) and the scene (scene.xml)
 results/             test results
 generative/          an experiment: thighs and tray grown by topology optimization, and the robot built with them
+.agents/skills/      generative-part: the generative pipeline as a skill for Claude Code and Codex (linked from .claude/skills/)
 ```
 
 ## Reproducing it

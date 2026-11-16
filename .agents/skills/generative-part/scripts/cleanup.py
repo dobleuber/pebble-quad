@@ -1,6 +1,6 @@
 """Step 2: make the optimizer's shape buildable, with distance-field operations on a 0.25 mm grid.
 
-    python generative/cleanup.py <part>
+    python cleanup.py <problems.py> <part>
 
 1. The density field becomes a solid; anything thinner than the minimum wall is grown to it.
 2. The crisp features are melted in (bosses, seats, liners); the keep-outs and the screw holes are cut exactly;
@@ -9,27 +9,23 @@
 4. Material that works in no load case (stubs of half-formed members) is pruned, and the thinnest walls get a
    margin for the smoothing still to come.
 
-Writes generative/out/<part>_clean.stl and <part>_clean.npy (the final voxels, 6 empty cells around).
+Reads out/<part>_rho.npy; writes out/<part>_clean.stl and <part>_clean.npy (the final voxels, 6 empty cells around).
 Needs pytopo3d, scipy, scikit-image, trimesh.
 """
-import os
-import sys
-
 import numpy as np
 import trimesh
 from scipy.ndimage import binary_fill_holes, distance_transform_edt as edt, gaussian_filter, label, map_coordinates
 from skimage.measure import marching_cubes
 
 from fe import VoxelModel
-from problems import PROBLEMS, sdf, union
+from genpart import load, sdf, union
 
-problem = PROBLEMS[sys.argv[1]]()
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+problem, _ = load(__doc__.split("\n")[2].strip())
 S, PAD = 0.25, 6                                        # working cell, and empty cells around the box
 IDLE = 1e-4                                             # share of the 99th-percentile energy density under which material is idle
-h = float(open(os.path.join(OUT, f"{problem.name}_rho.txt")).read())
+h = float(open(problem.path("out", f"{problem.name}_rho.txt")).read())
 
-rho = np.load(os.path.join(OUT, f"{problem.name}_rho.npy")).transpose(1, 0, 2)      # [y, x, z] -> [x, y, z]
+rho = np.load(problem.path("out", f"{problem.name}_rho.npy")).transpose(1, 0, 2)      # [y, x, z] -> [x, y, z]
 X, Y, Z = problem.coords(S, pad=PAD)
 x0, _, y0, _, z0, _ = problem.bounds
 index = np.stack([(X - x0) / h - 0.5, (Y - y0) / h - 0.5, (Z - z0) / h - 0.5])     # the fine cells, in the coarse grid's indices
@@ -107,7 +103,7 @@ if walls.any():
     print(f"thin walls grown by {(grown.sum() - part.sum()) * S ** 3:.0f} mm3")
     part = grown
 
-np.save(os.path.join(OUT, f"{problem.name}_clean.npy"), part)
+np.save(problem.path("out", f"{problem.name}_clean.npy"), part)
 
 
 # Take the voxel terraces off, then cut exactly once more (a cut into solid leaves no sliver).
@@ -119,6 +115,6 @@ mesh = trimesh.Trimesh(v, f)
 trimesh.repair.fix_normals(mesh)
 bodies = mesh.split(only_watertight=False)
 mesh = max(bodies, key=lambda b: abs(b.volume))          # crumbs the cuts left
-mesh.export(os.path.join(OUT, f"{problem.name}_clean.stl"))
+mesh.export(problem.path("out", f"{problem.name}_clean.stl"))
 print(f"{problem.name}_clean.stl: {len(mesh.faces)} triangles, watertight {mesh.is_watertight}, "
       f"{abs(mesh.volume):.0f} mm3, {len(bodies)} bodies before dropping crumbs, bounds {mesh.bounds.round(1).tolist()}")

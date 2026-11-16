@@ -1,7 +1,7 @@
 # Generative parts: an experiment
 
-Can this robot's structural parts be *grown* instead of drawn? This folder holds a pipeline that does it
-with free tools, the parts it produced, a second build of the robot that uses them (`quad_v2`), and the
+Can this robot's structural parts be *grown* instead of drawn? This folder holds the parts a generative
+pipeline produced with free tools, a second build of the robot that uses them (`quad_v2`), and the
 numbers that compare both builds. The hand-drawn robot in `src/` is unchanged and remains the reference.
 
 <p>
@@ -39,21 +39,21 @@ hand-drawn leg has a proper stress analysis (`fea/`, CalculiX); the generative p
 
 ## What the pipeline does
 
-Each part is described once, as plain data, in `problems.py`: the box it may fill, the keep-outs (servos,
-screw heads, the battery, the foot), the crisp features it must keep (bosses, seats, pocket walls), where it
-is held, and its load cases (forces at the foot, from `src/foot_loads.py`'s simulation peaks). Five steps
-read that description:
+The pipeline is a skill for Claude Code and Codex, [`generative-part`](../.agents/skills/generative-part/SKILL.md),
+kept in this repository so it can be used on other designs (`sh scripts/install-generative-part.sh` installs it
+for every project on a machine). Here, `problems.py` describes this robot's parts as plain data: the box each may
+fill, the keep-outs (servos, screw heads, the battery, the foot), the crisp features it must keep (bosses, seats,
+pocket walls), where it is held, and its load cases (forces at the foot, from `src/foot_loads.py`'s simulation
+peaks). The skill's steps read that description:
 
-| Step | Script | What it does |
-|---|---|---|
-| 1 | `optimize.py` | Topology optimization (SIMP, [PyTopo3D](https://github.com/jihoonkim888/PyTopo3D)) for all the load cases at once: one stiffness assembly and factorization per iteration, one solve per case; the objective is the sum of the cases' compliances, each as a share of its starting value. The crisp features are held solid |
-| 2 | `cleanup.py` | Makes the density field buildable with distance-field operations on a 0.25 mm grid: grows what is thinner than the minimum wall, melts the crisp features in, cuts keep-outs and holes exactly, fills cracks and bubbles, drops slivers, and prunes material that stores no strain energy in any load case (stubs of half-formed members) |
-| 3 | `finish_blender.py` | Blender: voxel remesh, smooth, swell back, remesh, subdivide; then exact booleans restore the crisp features, the envelope and the cuts. Retries with another skin if the surface comes out open |
-| 4 | `evaluate.py` | Samples the hand-drawn part and the generative one on the same voxels and solves both for every load case: mass, compliance, indicative stress |
-| 5 | `lite.py` | Writes a light copy of each mesh (3000 triangles, cut by the keep-outs again) that `quad_v2.py` turns into a faceted solid: a CAD document holds B-rep, not meshes |
-
-`fe.py` is the voxel finite-element model steps 2 and 4 share, `blender_ops.py` the Blender helpers of
-steps 3 and 5, and `run.sh` runs steps 1 to 4 for the parts named.
+| Step | What it does |
+|---|---|
+| preview | Draws the problem (design space, keep-outs, crisp features, supports, loads) over the hand-drawn part, before any run |
+| optimize | Topology optimization (SIMP, [PyTopo3D](https://github.com/jihoonkim888/PyTopo3D)) for all the load cases at once: one stiffness assembly and factorization per iteration, one solve per case; the objective is the sum of the cases' compliances, each as a share of its starting value. The crisp features are held solid |
+| cleanup | Makes the density field buildable with distance-field operations on a 0.25 mm grid: grows what is thinner than the minimum wall, melts the crisp features in, cuts keep-outs and holes exactly, fills cracks and bubbles, drops slivers, and prunes material that stores no strain energy in any load case (stubs of half-formed members) |
+| finish | Blender: voxel remesh, smooth, swell back, remesh, subdivide; then two booleans restore the crisp features and cut the keep-outs, the holes and everything outside the envelope. Retries with another skin if the surface comes out open |
+| evaluate | Samples the hand-drawn part and the generative one on the same voxels and solves both for every load case: mass, compliance, indicative stress |
+| lite | Writes a light copy of each mesh (a few thousand triangles, cut by the keep-outs again) that `quad_v2.py` turns into a faceted solid: a CAD document holds B-rep, not meshes |
 
 ## What it showed
 
@@ -100,41 +100,36 @@ beyond their volume (within 0.5 % of the full meshes).
 ## Running it
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install pytopo3d pypardiso scikit-image trimesh rtree matplotlib
+PY=$(sh .agents/skills/generative-part/scripts/setup_env.sh)
 ```
 
 ```bash
-PY=.venv/bin/python sh generative/run.sh thigh tray
+sh .agents/skills/generative-part/scripts/run.sh generative/problems.py thigh tray
 ```
 
 ```bash
-cad run generative/lite.py thigh && cad run generative/lite.py tray
+STEPS=lite sh .agents/skills/generative-part/scripts/run.sh generative/problems.py thigh tray
 ```
 
 ```bash
 sh generative/checks.sh
 ```
 
-The baselines `evaluate.py` compares with are exports of the hand-drawn parts:
-`cad model export <id> generative/out/v1_<part>.stl --tolerance 0.02` (`cad run src/parts.py` prints the ids).
+`baselines/` holds the hand-drawn parts the evaluation compares with, as exported by
+`cad model export <id> generative/baselines/<part>.stl --tolerance 0.02` (`cad run src/parts.py` prints the ids).
 
 ## Files
 
 ```
-problems.py           the parts as design problems: envelope, keep-outs, crisp features, supports, load cases
-optimize.py           step 1: topology optimization for all load cases
-cleanup.py            step 2: distance-field cleanup and pruning
-finish_blender.py     step 3: Blender finishing and exact booleans
-evaluate.py           step 4: hand-drawn against generative on the same voxels
-lite.py               step 5: light copies for the CAD assembly
-fe.py, blender_ops.py shared by the steps
-check_mesh.py         is a mesh one closed body?
-compare_pictures.py   the side-by-side picture
+problems.py           this robot's parts as design problems: envelope, keep-outs, crisp features, supports, load cases
+baselines/            the hand-drawn parts as meshes, to compare with
+parts/                the meshes to print (<part>.stl) and their light copies (<part>_lite.stl)
 quad_v2.py            the generative build of the robot
 quad_v2_mujoco.py     its simulation model
 render.py             its pictures
+compare_pictures.py   the side-by-side picture of the parts
 checks.sh             its checks
-parts/                the meshes to print (<part>.stl) and their light copies (<part>_lite.stl)
 sim/, results/        the generated MuJoCo model and the walking tests' results
 out/                  intermediate files (not kept)
+../.agents/skills/generative-part/   the pipeline itself, as a skill (also linked from .claude/skills/)
 ```

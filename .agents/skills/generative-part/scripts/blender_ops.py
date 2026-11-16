@@ -1,4 +1,4 @@
-"""Blender operations the finishing and the light-copy steps share. For scripts `cad run` runs (it brings bpy)."""
+"""Blender operations the finishing and the light-copy steps share (Blender 4.5 or later: the Manifold solver)."""
 import bpy
 import bmesh  # noqa: I001  (bpy brings it: it cannot come first)
 

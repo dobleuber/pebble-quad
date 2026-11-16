@@ -1,0 +1,10 @@
+schema_version: "1.1"
+name: lightens-robot-arm-link
+expected_outcome: |
+  The forearm is described as a design problem (envelope, a keep-out for the wrist servo and for the screw
+  heads, crisp features at the elbow boss and the servo's posts, a support at the elbow, at least three load
+  cases derived from the 150 g payload and the 9 g servo with the assumptions stated), the pipeline is run on
+  it, and the user gets a mesh to print and a report in Spanish comparing the grown forearm with the original:
+  mass, stiffness and indicative stress per load case, printability, and a verdict that follows the numbers.
+context:
+  scaffold_script: place-files.sh

@@ -3,7 +3,7 @@
 #
 #   sh generative/checks.sh
 #
-# Needs text-to-cad's `cad` and python3. The parts' light copies must be there (generative/lite.py).
+# Needs text-to-cad's `cad` and python3. The parts' light copies must be there (the generative-part skill's lite step).
 set -u
 cd "$(dirname "$0")/.."
 ID=$(cad run generative/quad_v2.py 2>&1 | awk '/^  id:/ {print $2}')

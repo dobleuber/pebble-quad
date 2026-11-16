@@ -1,14 +1,12 @@
-"""The voxel finite-element model the pipeline's steps share: 8-node bricks on a problem's grid, held and
-loaded as the problem says, solved once per load case (one factorization). Needs pytopo3d (and its pypardiso)."""
+"""The voxel finite-element model the steps share: 8-node bricks on a problem's grid, held and loaded as the
+problem says, solved once per load case (one factorization). Needs pytopo3d (and its pypardiso)."""
 import numpy as np
 import scipy.sparse as sp
 from pytopo3d.utils.assembly import build_edof, build_force_vector, build_supports
 from pytopo3d.utils.solver import get_solver
 from pytopo3d.utils.stiffness import lk_H8
 
-from problems import union
-
-E, NU = 3500.0, 0.3                                       # PLA: MPa, -
+from genpart import union
 
 
 class VoxelModel:
@@ -18,7 +16,7 @@ class VoxelModel:
         self.ny, self.nx, self.nz = self.X.shape
         self.ndof = 3 * (self.nx + 1) * (self.ny + 1) * (self.nz + 1)
         self.edof, self.iK, self.jK = build_edof(self.nx, self.ny, self.nz)
-        self.KE = lk_H8(NU)
+        self.KE = lk_H8(problem.poisson)
         self.solver, _ = get_solver(False)
 
     def solve(self, solid):
@@ -34,11 +32,11 @@ class VoxelModel:
         F = np.stack([build_force_vector(self.nx, self.ny, self.nz, self.ndof, f) for f in fields.values()], axis=1)
         U = np.zeros(F.shape)
         U[free] = np.asarray(self.solver(K[free, :][:, free], F[free])).reshape(len(free), -1)
-        U /= E * h                                           # unit bricks of unit modulus -> mm
+        U /= p.youngs * h                                    # unit bricks of unit modulus -> mm
         out = {}
         for k, (case, field) in enumerate(fields.items()):
             ue = U[:, k][self.edof - 1]
-            energy = 0.5 * np.einsum("ei,ij,ej->e", ue, self.KE, ue) * stiff * E * h / h ** 3
+            energy = 0.5 * np.einsum("ei,ij,ej->e", ue, self.KE, ue) * stiff * p.youngs * h / h ** 3
             out[case] = {"compliance": float(F[:, k] @ U[:, k]), "energy": energy.reshape(shape, order="F"),
                          "touched": support | (np.abs(field).sum(axis=3) > 0)}
         return out
