@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: says-when-a-part-is-not-worth-growing
+expected_outcome: |
+  The answer explains, before running anything, that neither part is a good candidate: the cover is a shell
+  that carries no load between interfaces, and the spacers are almost entirely mandatory features with nothing
+  left to rearrange. It does not present optimization results for them. It says which kinds of part of a
+  hexapod do gain (legs, femur and tibia links, servo brackets, the chassis plates) and what it needs to start
+  on one of those (the part and its neighbours as files, and the loads).

@@ -146,6 +146,41 @@ it from more than a few centimetres.
 - **A side's two legs can hit each other** when both hips turn more than about 25° inward at once.
   The gaits do not go there, and `gait.legs_clear()` checks it on every servo command.
 
+## A generative build (experiment)
+
+The thighs and the chassis tray can also be *grown* instead of drawn: topology optimization with free tools
+(PyTopo3D, distance fields, Blender) from a description of each part's job. [`generative/`](generative/README.md)
+holds those parts, a second build of the robot that uses them (`quad_v2`) and the numbers that compare both.
+The hand-drawn robot above stays the reference.
+
+<p>
+<img src="generative/media/quad_v2.png" width="48%" alt="The generative build">
+<img src="generative/media/quad_v2_open.png" width="48%" alt="The generative build without its shell">
+</p>
+<p>
+<img src="generative/media/parts_v1_v2.png" width="97%" alt="Hand-drawn and generative parts side by side">
+</p>
+
+| | Hand-drawn | Generative build |
+|---|---|---|
+| Thigh, each | 3.64 g | 3.17 g (−13 %), 1.5 to 5 times stiffer over four load cases |
+| Chassis tray | 15.28 g | 13.30 g (−13 %) at the same stiffness |
+| Lower leg | 0.98 g | the same part: the grown one was 3 to 7 times less stiff at the same mass |
+| Robot | 103.7 g | 99.8 g |
+| Trot on flat ground | 83 mm/s, servo load 22 % | 82 mm/s, 22 % |
+| Walking tests (82) | reference | 79 with the same verdict; 3 marginal ones worse |
+| Printing the thigh and the tray | no supports | supports needed (about half a thigh's own volume) |
+| Strength | stress analysis with safety factors | compared on voxels only: no safety factor |
+
+It passes the same checks as the hand-drawn robot (interference at 51 poses, the leg-clearance guard, joint
+travel, the simulation model); they are in [`generative/README.md`](generative/README.md), with what the
+experiment showed. In short: the thigh is where growing pays, 4 g on 104 g does not change how the robot
+walks, and the price is supports and parts that are meshes instead of editable CAD.
+
+To print this build, take the tray and the thighs from `generative/parts/` in place of the hand-drawn ones:
+`tray.stl`, `thigh.stl` for the front-left and rear-right legs, and `thigh_b.stl` (its mirror image) for the
+front-right and rear-left. Everything else is the same. [Video of it trotting](generative/media/trot_v2.mp4).
+
 ## Before you build it
 
 - **Measure a real servo before printing.** Only the envelope (19.74 × 8.34 × 23.25 mm, EMAX ES9051;
@@ -195,9 +230,11 @@ src/walk_sim.py      tests and videos
 src/foot_loads.py    peak forces on the feet (gaits and drops)
 src/leg_study.py     one leg's model for the stress analysis
 fea/                 the 3 load cases and their results
-scripts/             text-to-cad installer
+scripts/             installers: text-to-cad, and the generative-part skill for use in other projects
 sim/                 generated MuJoCo model (quad.xml, meshes) and the scene (scene.xml)
 results/             test results
+generative/          an experiment: thighs and tray grown by topology optimization, and the robot built with them
+.agents/skills/      generative-part: the generative pipeline as a skill for Claude Code and Codex (linked from .claude/skills/)
 ```
 
 ## Reproducing it
@@ -232,6 +269,37 @@ xvfb-run -a env MUJOCO_GL=glfw cad run src/walk_sim.py --gait wave --video media
 `cad run src/robot.py` prints the link to the 3D viewer, where the joints can be moved and the four
 moves played. For print files, with the `id` each part prints from `cad run src/parts.py`:
 `cad model export <id> STL/part.stl`.
+
+## The generative-part skill
+
+The pipeline that grew those parts is kept here as a skill for Claude Code and Codex,
+[`generative-part`](.agents/skills/generative-part/SKILL.md), so it can be used on other designs: any
+structural part of a robot or a printed mechanism, from build123d / text-to-cad, OpenSCAD, STEP or STL.
+Inside this repository both agents find it by themselves (`.agents/skills/`, linked from `.claude/skills/`).
+For every other project on a machine:
+
+```bash
+sh scripts/install-generative-part.sh
+```
+
+Then ask in plain words: *"lighten this bracket: it is screwed here and carries 2 kg at the tip"*. The skill
+has the agent
+
+1. say which parts are worth growing (arms, legs, brackets) and which are not (covers, spacers, parts that are
+   all bosses and screws);
+2. bring the part and its neighbours into one frame and measure them;
+3. describe the part's job: where it may be, what it must leave alone, what must stay exact, where it is held
+   and what loads it, with any assumed load written down;
+4. draw that description over the original part before spending minutes on it;
+5. grow the part for all its load cases at once, following the case that is furthest behind the original,
+   then clean it up, finish it and check that it prints;
+6. report mass, stiffness and indicative stress against the original, case by case, with a verdict: adopt it,
+   or keep the original.
+
+It needs Python (the skill makes its own environment) and Blender 4.5 or later, which text-to-cad brings.
+What comes out is a mesh to print, not editable CAD, and a comparison with the original, not a safety factor.
+[`generative/problems.py`](generative/problems.py) is a worked example: this robot's three parts as the skill
+reads them.
 
 ## Sources of the servo data
 
