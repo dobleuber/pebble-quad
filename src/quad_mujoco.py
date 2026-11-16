@@ -18,8 +18,9 @@ FRICTIONLOSS = 0.002   # N*m, gear train dry friction (tuned)
 FOOT_FRICTION = [0.8, 0.005, 0.0001]   # TPU on a table top
 
 
-def quad_mujoco(kp=KP, stall=p.SERVO_STALL_NM, foot_friction=FOOT_FRICTION) -> mujoco.MjSpec:
-    s = spec(quad())
+def quad_mujoco(kp=KP, stall=p.SERVO_STALL_NM, foot_friction=FOOT_FRICTION, robot=None) -> mujoco.MjSpec:
+    """The simulation model of the robot (src/robot.py's, or another assembly of the same joints and part names)."""
+    s = spec(robot if robot is not None else quad())
 
     # Collisions: ball feet, boxes for what touches the floor in a fall, nothing for the rest.
     for path in parts(s):

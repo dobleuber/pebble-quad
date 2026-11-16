@@ -18,12 +18,12 @@ def placed(part, plane, label, local=None):
     return shape
 
 
-@model
-def quad():
+def assemble(tray_, thigh_of, shank_of):
+    """The robot around its three structural parts: a tray, and a thigh and a lower leg per hand (+1 or -1,
+    sx * sy: mirrored legs take mirrored parts), each in its own frame as in parts.py."""
     servo_, horn_ = servo().shape, horn().shape
 
     # ---- chassis: tray, deck, the four hip servos, battery, controller
-    tray_ = tray().shape
     point_mass(tray_, p.WIRING_MASS, bd.Pos(0, 0, 0), name="wiring")
     deck_ = bd.Pos(0, 0, p.TRAY_Z1) * deck().shape
     deck_.label = "deck"
@@ -59,14 +59,14 @@ def quad():
 
         hip_horn = placed(horn_, thigh_plane, "hip_horn")
         mass(hip_horn, p.HORN_MASS)
-        bracket = placed(thigh().shape, thigh_plane, "thigh")
+        bracket = placed(thigh_of(sx * sy), thigh_plane, "thigh")
         knee_servo = placed(servo_, thigh_plane, "knee_servo", bd.Pos(p.L1, 0, p.THIGH_T))
         mass(knee_servo, p.SERVO_MASS)
         thigh_link = bd.Compound(children=[hip_horn, bracket, knee_servo], label=f"thigh_{name}")
 
         knee_horn = placed(horn_, shank_plane, "knee_horn")
         mass(knee_horn, p.HORN_MASS)
-        plate = placed((shank_a if sx * sy > 0 else shank_b)().shape, shank_plane, "shank")   # curls mirror left/right
+        plate = placed(shank_of(sx * sy), shank_plane, "shank")
         # The foot is modelled as printed (flat down, socket up): turn its +Z onto the shank's +X.
         ball = placed(foot().shape, shank_plane, "foot",
                       bd.Pos(p.L2 - FOOT_FLAT, 0, p.PEG / 2) * bd.Rot(0, 90, 0))
@@ -98,6 +98,12 @@ def quad():
     configuration_sequence(robot, "wave", wave, duration=5.0)
     configuration_sequence(robot, "dance", dance, duration=6.0)
     return robot
+
+
+@model
+def quad():
+    return assemble(tray().shape, lambda hand: thigh().shape,                      # the thigh is its own mirror image
+                    lambda hand: (shank_a if hand > 0 else shank_b)().shape)       # the lower legs' bows mirror
 
 
 if __name__ == "__main__":

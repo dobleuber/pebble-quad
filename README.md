@@ -198,6 +198,7 @@ fea/                 the 3 load cases and their results
 scripts/             text-to-cad installer
 sim/                 generated MuJoCo model (quad.xml, meshes) and the scene (scene.xml)
 results/             test results
+generative/          an experiment: thighs and tray grown by topology optimization, and the robot built with them
 ```
 
 ## Reproducing it
